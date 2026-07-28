@@ -6,14 +6,14 @@ import { z } from "zod";
 import { capturePageState } from "@/lib/browsing/capture-page-state";
 import { validateActionAgainstSafetyGuardrail } from "@/lib/browsing/safetyGuardrail";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 const schema = z.object({ persona: z.enum(["impatient", "price", "low-tech", "language", "accessibility"]).default("price") });
 
 async function decide(state: Awaited<ReturnType<typeof capturePageState>>, history: unknown[]) {
   if (!process.env.GROQ_API_KEY) throw new Error("GROQ_API_KEY is not configured.");
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  const result = await groq.chat.completions.create({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", temperature: 0, response_format: { type: "json_object" }, messages: [{ role: "system", content: "You control a browser as a price-sensitive customer. Goal: start a free trial without completing payment. Return JSON action with type click|type|conclude, elementDescription, text when typing, outcome when concluding, and first-person reasoning. Choose only exact visible labels. Use test@example.com for email. At payment or card collection conclude stuck." }, { role: "user", content: JSON.stringify({ state, history }) }] });
+  const result = await groq.chat.completions.create({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", temperature: 0, response_format: { type: "json_object" }, messages: [{ role: "system", content: "You control a browser as a price-sensitive customer. Goal: start a free trial without completing payment. Return JSON action with type click|type|conclude, elementDescription, text when typing, outcome when concluding, and first-person reasoning. Choose only exact visible labels. Use test@example.com for an empty email. Never repeat an action already in history. If a field already has a value, continue. At payment or card collection conclude stuck." }, { role: "user", content: JSON.stringify({ state, history }) }] });
   const parsed = JSON.parse(result.choices[0]?.message?.content || "{}") as { action?: unknown; type?: string; elementDescription?: string; text?: string; outcome?: string; reasoning?: string };
   if (typeof parsed.action === "object" && parsed.action) return parsed as { action: { type?: string; elementDescription?: string; text?: string; outcome?: string; reasoning?: string } };
   if (typeof parsed.action === "string") return { action: { type: parsed.type || "click", elementDescription: parsed.action, text: parsed.text, outcome: parsed.outcome, reasoning: parsed.reasoning } };
