@@ -82,6 +82,18 @@ function deterministicFixtureAction(state: Awaited<ReturnType<typeof capturePage
   return { type: "conclude" as const, outcome: "stuck" as const, reasoning: "I reached a boundary where no safe progress control is available." };
 }
 
+function reconcileActionWithElement(action: z.infer<typeof actionSchema>["action"], state: Awaited<ReturnType<typeof capturePageState>>) {
+  const resolvedLabel = bestVisibleLabel(action.elementDescription, state);
+  const element = state.elements.find((item) => item.label === resolvedLabel);
+  if (!element) return deterministicFixtureAction(state);
+  if (["input", "textarea", "select"].includes(element.tag) && action.type === "click") {
+    if (element.label.toLowerCase().includes("card")) return { type: "conclude" as const, outcome: "stuck" as const, reasoning: "This is a payment-data boundary, so I will stop safely." };
+    return { type: "type" as const, elementDescription: element.label, text: action.text || "test@example.com", reasoning: action.reasoning };
+  }
+  if ((element.tag === "button" || element.tag === "a") && action.type === "type") return { ...action, type: "click" as const, elementDescription: element.label };
+  return { ...action, elementDescription: resolvedLabel };
+}
+
 export async function POST(request: Request) {
   let browser;
   try {
@@ -98,10 +110,7 @@ export async function POST(request: Request) {
       const decision = await decide({ state, history: trace, persona: input.persona, goal: input.goal });
       let action = decision.action;
       if (!action?.type) throw new Error("Model returned an invalid browser action.");
-      const proposedLabel = bestVisibleLabel(action.elementDescription, state);
-      if (action.type !== "conclude" && !state.elements.some((element) => element.label === proposedLabel)) {
-        action = deterministicFixtureAction(state);
-      }
+      if (action.type !== "conclude") action = reconcileActionWithElement(action, state);
       if (action.type === "conclude") { trace.push({ step, state, action, model: decision.model, guardrail: { allowed: true, code: "CONCLUDED" } }); break; }
       const kind = action.type === "type" ? "type" : "click";
       const resolvedLabel = bestVisibleLabel(action.elementDescription, state);
