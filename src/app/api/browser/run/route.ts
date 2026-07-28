@@ -23,6 +23,17 @@ const actionSchema = z.object({ action: z.object({
   reasoning: z.string().min(3).max(1000)
 }) });
 
+function normalizeDecision(raw: string) {
+  const parsed = JSON.parse(raw) as { action?: unknown; type?: unknown; elementDescription?: unknown; text?: unknown; outcome?: unknown; reasoning?: unknown };
+  if (typeof parsed.action === "string") {
+    return { action: { type: parsed.type || "click", elementDescription: parsed.action, text: parsed.text, outcome: parsed.outcome, reasoning: parsed.reasoning || `I will use ${parsed.action}.` } };
+  }
+  if (!parsed.action && parsed.type) {
+    return { action: { type: parsed.type, elementDescription: parsed.elementDescription, text: parsed.text, outcome: parsed.outcome, reasoning: parsed.reasoning || "I will continue with the visible control." } };
+  }
+  return parsed;
+}
+
 async function decide(input: { state: Awaited<ReturnType<typeof capturePageState>>; history: unknown[]; persona: string; goal: string }) {
   if (!process.env.GROQ_API_KEY) throw new Error("GROQ_API_KEY is not configured.");
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -32,7 +43,7 @@ async function decide(input: { state: Awaited<ReturnType<typeof capturePageState
   for (const model of models) {
     try {
       const result = await groq.chat.completions.create({ model, temperature: 0, response_format: { type: "json_object" }, messages: [{ role: "system", content: `You control a browser as this synthetic customer: ${policy}. Goal: ${input.goal}. Return JSON action with type click|type|conclude, elementDescription, text when typing, outcome when concluding, and first-person reasoning. Choose only exact visible labels. Use test@example.com for an empty email. Never repeat an action already in history. If a field already has a value, continue. At payment or card collection conclude stuck.` }, { role: "user", content: JSON.stringify({ state: input.state, history: input.history }) }] });
-      return { ...actionSchema.parse(JSON.parse(result.choices[0]?.message?.content || "{}")), model };
+      return { ...actionSchema.parse(normalizeDecision(result.choices[0]?.message?.content || "{}")), model };
     } catch (error) {
       lastError = error;
       if (!(error instanceof Error) || !error.message.includes("429")) throw error;
