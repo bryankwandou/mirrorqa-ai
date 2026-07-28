@@ -15,4 +15,4 @@ Copy `.env.example` to `.env.local` and add `GROQ_API_KEY` to enable live agent 
 
 ## Honest execution boundary
 
-The public Vercel deployment demonstrates the real model call, deterministic pre-action guardrail, signed-wallet ownership check, and independently verified Solana devnet Memo receipt. Multi-minute Playwright execution belongs on an isolated container worker with durable orchestration and is not represented as active in the Vercel demo.
+The public Vercel deployment demonstrates a real Groq-directed Playwright loop against the included live fixture, deterministic pre-action guardrail, signed-wallet ownership check, and independently verified Solana devnet Memo receipt. Arbitrary external targets and multi-minute scheduled runs still belong on an isolated worker with durable orchestration.

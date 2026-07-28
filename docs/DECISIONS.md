@@ -2,7 +2,7 @@
 
 ## Browser execution
 
-Vercel hosts the web application and short-lived API requests. Real autonomous browser sessions require an isolated worker on a container platform because they can run for minutes, need Chromium, and must survive request timeouts. A production rollout should connect an Inngest orchestration function to that worker. The current public MVP does not disguise fixture screenshots as live captures.
+Vercel hosts the web application and a bounded Chromium workflow using Playwright plus `@sparticuz/chromium`. The public fixture run performs a genuine observe, model-decide, validate, execute, recapture loop and returns a real screenshot. Arbitrary external targets and multi-minute scheduled sessions still require an isolated worker because they need durable execution, controlled egress, and longer timeouts.
 
 ## Model provider
 

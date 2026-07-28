@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./product.css";
 import "./details.css";
+import "./iteration.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://mirrorqa-ai.vercel.app"),
