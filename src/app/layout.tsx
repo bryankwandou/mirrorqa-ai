@@ -3,6 +3,7 @@ import "./globals.css";
 import "./product.css";
 import "./details.css";
 import "./iteration.css";
+import "./workflow.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://mirrorqa-ai.vercel.app"),
