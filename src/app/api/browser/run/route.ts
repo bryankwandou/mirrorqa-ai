@@ -24,7 +24,8 @@ const actionSchema = z.object({ action: z.object({
 }) });
 
 function normalizeDecision(raw: string) {
-  const parsed = JSON.parse(raw) as { action?: unknown; type?: unknown; elementDescription?: unknown; text?: unknown; outcome?: unknown; reasoning?: unknown };
+  let parsed = JSON.parse(raw) as { action?: unknown; type?: unknown; elementDescription?: unknown; text?: unknown; outcome?: unknown; reasoning?: unknown } | unknown[];
+  if (Array.isArray(parsed)) parsed = parsed[0] || {};
   const normalizeType = (value: unknown) => value === "type" ? "type" : value === "conclude" ? "conclude" : "click";
   const normalizeOutcome = (value: unknown) => ["goal_reached", "abandoned_due_to_friction", "stuck"].includes(String(value)) ? value : undefined;
   if (typeof parsed.action === "string") {
@@ -50,7 +51,10 @@ async function decide(input: { state: Awaited<ReturnType<typeof capturePageState
     try {
       const compactHistory = input.history.slice(-4).map((entry) => { const item = entry as { action?: unknown }; return item.action; });
       const result = await groq.chat.completions.create({ model, temperature: 0, max_completion_tokens: 220, response_format: { type: "json_object" }, messages: [{ role: "system", content: `You control a browser as this synthetic customer: ${policy}. Goal: ${input.goal}. Return JSON action with type click|type|conclude, elementDescription, text when typing, outcome when concluding, and first-person reasoning. Choose only exact visible labels. Use test@example.com for an empty email. Never repeat an action already in history. If a field already has a value, continue. At payment or card collection conclude stuck.` }, { role: "user", content: JSON.stringify({ state: input.state, history: compactHistory }) }] });
-      return { ...actionSchema.parse(normalizeDecision(result.choices[0]?.message?.content || "{}")), model };
+      const normalized = normalizeDecision(result.choices[0]?.message?.content || "{}");
+      const checked = actionSchema.safeParse(normalized);
+      if (!checked.success) return { action: deterministicFixtureAction(input.state), model, malformedModelOutput: true };
+      return { ...checked.data, model };
     } catch (error) {
       lastError = error;
       if (!(error instanceof Error) || !error.message.includes("429")) throw error;
