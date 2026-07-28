@@ -48,7 +48,8 @@ async function decide(input: { state: Awaited<ReturnType<typeof capturePageState
   let lastError: unknown;
   for (const model of models) {
     try {
-      const result = await groq.chat.completions.create({ model, temperature: 0, response_format: { type: "json_object" }, messages: [{ role: "system", content: `You control a browser as this synthetic customer: ${policy}. Goal: ${input.goal}. Return JSON action with type click|type|conclude, elementDescription, text when typing, outcome when concluding, and first-person reasoning. Choose only exact visible labels. Use test@example.com for an empty email. Never repeat an action already in history. If a field already has a value, continue. At payment or card collection conclude stuck.` }, { role: "user", content: JSON.stringify({ state: input.state, history: input.history }) }] });
+      const compactHistory = input.history.slice(-4).map((entry) => { const item = entry as { action?: unknown }; return item.action; });
+      const result = await groq.chat.completions.create({ model, temperature: 0, max_completion_tokens: 220, response_format: { type: "json_object" }, messages: [{ role: "system", content: `You control a browser as this synthetic customer: ${policy}. Goal: ${input.goal}. Return JSON action with type click|type|conclude, elementDescription, text when typing, outcome when concluding, and first-person reasoning. Choose only exact visible labels. Use test@example.com for an empty email. Never repeat an action already in history. If a field already has a value, continue. At payment or card collection conclude stuck.` }, { role: "user", content: JSON.stringify({ state: input.state, history: compactHistory }) }] });
       return { ...actionSchema.parse(normalizeDecision(result.choices[0]?.message?.content || "{}")), model };
     } catch (error) {
       lastError = error;

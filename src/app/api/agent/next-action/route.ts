@@ -25,6 +25,7 @@ export async function POST(request: Request) {
         const completion = await groq.chat.completions.create({
           model,
           temperature: 0.15,
+          max_completion_tokens: 220,
           response_format: { type: "json_object" },
           messages: [
             { role: "system", content: `You are a synthetic customer controlling a browser. Persona policy: ${policy}. Return only JSON: {"action":{"type":"click|type|scroll|wait|conclude","elementDescription":"optional","text":"optional","direction":"up|down optional","outcome":"goal_reached|abandoned_due_to_friction|stuck optional","reasoning":"specific first-person reason"}}. Never submit payment or real personal data. Ground the action only in supplied page state.` },
