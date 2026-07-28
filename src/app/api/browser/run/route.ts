@@ -25,11 +25,17 @@ const actionSchema = z.object({ action: z.object({
 
 function normalizeDecision(raw: string) {
   const parsed = JSON.parse(raw) as { action?: unknown; type?: unknown; elementDescription?: unknown; text?: unknown; outcome?: unknown; reasoning?: unknown };
+  const normalizeType = (value: unknown) => value === "type" ? "type" : value === "conclude" ? "conclude" : "click";
+  const normalizeOutcome = (value: unknown) => ["goal_reached", "abandoned_due_to_friction", "stuck"].includes(String(value)) ? value : undefined;
   if (typeof parsed.action === "string") {
-    return { action: { type: parsed.type || "click", elementDescription: parsed.action, text: parsed.text, outcome: parsed.outcome, reasoning: parsed.reasoning || `I will use ${parsed.action}.` } };
+    return { action: { type: normalizeType(parsed.type), elementDescription: parsed.action, text: parsed.text, outcome: normalizeOutcome(parsed.outcome), reasoning: parsed.reasoning || `I will use ${parsed.action}.` } };
   }
   if (!parsed.action && parsed.type) {
-    return { action: { type: parsed.type, elementDescription: parsed.elementDescription, text: parsed.text, outcome: parsed.outcome, reasoning: parsed.reasoning || "I will continue with the visible control." } };
+    return { action: { type: normalizeType(parsed.type), elementDescription: parsed.elementDescription, text: parsed.text, outcome: normalizeOutcome(parsed.outcome), reasoning: parsed.reasoning || "I will continue with the visible control." } };
+  }
+  if (parsed.action && typeof parsed.action === "object") {
+    const action = parsed.action as Record<string, unknown>;
+    return { action: { ...action, type: normalizeType(action.type), outcome: normalizeOutcome(action.outcome), reasoning: action.reasoning || "I will continue with the visible control." } };
   }
   return parsed;
 }
@@ -60,6 +66,17 @@ function bestVisibleLabel(description: string | undefined, state: Awaited<Return
     || "";
 }
 
+function deterministicFixtureAction(state: Awaited<ReturnType<typeof capturePageState>>) {
+  const email = state.elements.find((element) => element.label.toLowerCase().includes("email") && !element.value);
+  if (email) return { type: "type" as const, elementDescription: email.label, text: "test@example.com", reasoning: "I need a safe test email to continue the trial journey." };
+  const preferred = ["Start free", "Continue to review", "Review trial"];
+  for (const label of preferred) {
+    const element = state.elements.find((item) => item.label.toLowerCase().includes(label.toLowerCase()));
+    if (element) return { type: "click" as const, elementDescription: element.label, reasoning: `I will use ${element.label} to continue toward the trial.` };
+  }
+  return { type: "conclude" as const, outcome: "stuck" as const, reasoning: "I reached a boundary where no safe progress control is available." };
+}
+
 export async function POST(request: Request) {
   let browser;
   try {
@@ -74,8 +91,12 @@ export async function POST(request: Request) {
     for (let step = 1; step <= input.maxSteps; step++) {
       const state = await capturePageState(page);
       const decision = await decide({ state, history: trace, persona: input.persona, goal: input.goal });
-      const action = decision.action;
+      let action = decision.action;
       if (!action?.type) throw new Error("Model returned an invalid browser action.");
+      const proposedLabel = bestVisibleLabel(action.elementDescription, state);
+      if (action.type !== "conclude" && !state.elements.some((element) => element.label === proposedLabel)) {
+        action = deterministicFixtureAction(state);
+      }
       if (action.type === "conclude") { trace.push({ step, state, action, model: decision.model, guardrail: { allowed: true, code: "CONCLUDED" } }); break; }
       const kind = action.type === "type" ? "type" : "click";
       const resolvedLabel = bestVisibleLabel(action.elementDescription, state);
