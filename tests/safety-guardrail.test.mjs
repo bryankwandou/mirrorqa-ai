@@ -23,3 +23,17 @@ test("allows safe test values and unrelated confirmation", () => {
   assert.equal(validateActionAgainstSafetyGuardrail({ kind: "click", label: "Confirm workspace name" }).allowed, true);
   assert.equal(validateActionAgainstSafetyGuardrail({ kind: "click", label: "Continue" }).allowed, true);
 });
+
+test("blocks payment intent across alternate labels", () => {
+  for (const action of [
+    { kind: "click", ariaLabel: "Submit payment" },
+    { kind: "click", text: "Buy now" },
+    { kind: "click", name: "Complete purchase" },
+    { kind: "click", label: "Place order" }
+  ]) assert.equal(validateActionAgainstSafetyGuardrail(action).code, "PAYMENT_COMPLETION_BLOCKED");
+});
+
+test("does not permit a real-looking value through a sandbox field label alone", () => {
+  assert.equal(validateActionAgainstSafetyGuardrail({ kind: "type", label: "Test card number", value: "4242424242424242" }).allowed, false);
+  assert.equal(validateActionAgainstSafetyGuardrail({ kind: "type", label: "Test card number", value: "sandbox-card" }).allowed, true);
+});

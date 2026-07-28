@@ -14,3 +14,7 @@ jobs:
         run: node --test tests/safety-guardrail.test.mjs
       - run: npm run type-check
       - run: npm run build
+      - name: Production route smoke test
+        env:
+          TEST_BASE_URL: https://mirrorqa-ai.vercel.app
+        run: node --test tests/public-routes.test.mjs
