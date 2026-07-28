@@ -1,0 +1,4 @@
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+import { Brand } from "@/components/brand";
+export default function SignInPage(){return <main className="auth-page"><section><Brand/><div><span className="eyebrow">Demo access</span><h1>Return to the customer’s point of view.</h1><p>Authentication is configured through Clerk in production. The public MVP opens a read-only product workspace directly.</p><Link className="button primary large" href="/dashboard">Enter demo workspace <ArrowRight size={16}/></Link></div><small>MirrorQA / Synthetic customer evidence</small></section><aside><div className="auth-quote"><span>Observed friction</span><blockquote>“I can see the monthly price, but not the most I could be charged.”</blockquote><p>Price-sensitive persona / Trial to checkout / Step 02</p></div></aside></main>}
