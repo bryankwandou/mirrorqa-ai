@@ -27,8 +27,18 @@ async function decide(input: { state: Awaited<ReturnType<typeof capturePageState
   if (!process.env.GROQ_API_KEY) throw new Error("GROQ_API_KEY is not configured.");
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
   const policy = personaPolicies[input.persona] ?? personaPolicies.price;
-  const result = await groq.chat.completions.create({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", temperature: 0, response_format: { type: "json_object" }, messages: [{ role: "system", content: `You control a browser as this synthetic customer: ${policy}. Goal: ${input.goal}. Return JSON action with type click|type|conclude, elementDescription, text when typing, outcome when concluding, and first-person reasoning. Choose only exact visible labels. Use test@example.com for an empty email. Never repeat an action already in history. If a field already has a value, continue. At payment or card collection conclude stuck.` }, { role: "user", content: JSON.stringify({ state: input.state, history: input.history }) }] });
-  return actionSchema.parse(JSON.parse(result.choices[0]?.message?.content || "{}"));
+  const models = [...new Set([process.env.GROQ_MODEL || "llama-3.3-70b-versatile", "llama-3.1-8b-instant"])];
+  let lastError: unknown;
+  for (const model of models) {
+    try {
+      const result = await groq.chat.completions.create({ model, temperature: 0, response_format: { type: "json_object" }, messages: [{ role: "system", content: `You control a browser as this synthetic customer: ${policy}. Goal: ${input.goal}. Return JSON action with type click|type|conclude, elementDescription, text when typing, outcome when concluding, and first-person reasoning. Choose only exact visible labels. Use test@example.com for an empty email. Never repeat an action already in history. If a field already has a value, continue. At payment or card collection conclude stuck.` }, { role: "user", content: JSON.stringify({ state: input.state, history: input.history }) }] });
+      return { ...actionSchema.parse(JSON.parse(result.choices[0]?.message?.content || "{}")), model };
+    } catch (error) {
+      lastError = error;
+      if (!(error instanceof Error) || !error.message.includes("429")) throw error;
+    }
+  }
+  throw lastError;
 }
 
 function bestVisibleLabel(description: string | undefined, state: Awaited<ReturnType<typeof capturePageState>>) {
@@ -55,12 +65,12 @@ export async function POST(request: Request) {
       const decision = await decide({ state, history: trace, persona: input.persona, goal: input.goal });
       const action = decision.action;
       if (!action?.type) throw new Error("Model returned an invalid browser action.");
-      if (action.type === "conclude") { trace.push({ step, state, action, guardrail: { allowed: true, code: "CONCLUDED" } }); break; }
+      if (action.type === "conclude") { trace.push({ step, state, action, model: decision.model, guardrail: { allowed: true, code: "CONCLUDED" } }); break; }
       const kind = action.type === "type" ? "type" : "click";
       const resolvedLabel = bestVisibleLabel(action.elementDescription, state);
       const guardrail = validateActionAgainstSafetyGuardrail({ kind, label: resolvedLabel, value: action.text });
       action.elementDescription = resolvedLabel;
-      trace.push({ step, state, action, guardrail });
+      trace.push({ step, state, action, model: decision.model, guardrail });
       if (!guardrail.allowed) break;
       if (kind === "click") await page.getByRole("button", { name: action.elementDescription || "", exact: false }).first().click();
       else await page.getByLabel(action.elementDescription || "", { exact: false }).first().fill(action.text || "test@example.com");

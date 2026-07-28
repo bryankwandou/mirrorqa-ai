@@ -18,18 +18,28 @@ export async function POST(request: Request) {
     if (!process.env.GROQ_API_KEY) return NextResponse.json({ ...fallback, mode: "safe-fallback" }, { status: 503 });
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
     const policy = personaPolicies[input.persona] ?? personaPolicies.impatient;
-    const completion = await groq.chat.completions.create({
-      model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
-      temperature: 0.15,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: `You are a synthetic customer controlling a browser. Persona policy: ${policy}. Return only JSON: {"action":{"type":"click|type|scroll|wait|conclude","elementDescription":"optional","text":"optional","direction":"up|down optional","outcome":"goal_reached|abandoned_due_to_friction|stuck optional","reasoning":"specific first-person reason"}}. Never submit payment or real personal data. Ground the action only in supplied page state.` },
-        { role: "user", content: JSON.stringify({ goal: input.goal, pageState: input.pageState, history: input.history }) }
-      ]
-    });
-    const content = completion.choices[0]?.message?.content;
-    if (!content) throw new Error("The model returned no action.");
-    return NextResponse.json({ ...JSON.parse(content), mode: "groq-live", model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile" });
+    const models = [...new Set([process.env.GROQ_MODEL || "llama-3.3-70b-versatile", "llama-3.1-8b-instant"])];
+    let lastError: unknown;
+    for (const model of models) {
+      try {
+        const completion = await groq.chat.completions.create({
+          model,
+          temperature: 0.15,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: `You are a synthetic customer controlling a browser. Persona policy: ${policy}. Return only JSON: {"action":{"type":"click|type|scroll|wait|conclude","elementDescription":"optional","text":"optional","direction":"up|down optional","outcome":"goal_reached|abandoned_due_to_friction|stuck optional","reasoning":"specific first-person reason"}}. Never submit payment or real personal data. Ground the action only in supplied page state.` },
+            { role: "user", content: JSON.stringify({ goal: input.goal, pageState: input.pageState, history: input.history }) }
+          ]
+        });
+        const content = completion.choices[0]?.message?.content;
+        if (!content) throw new Error("The model returned no action.");
+        return NextResponse.json({ ...JSON.parse(content), mode: "groq-live", model });
+      } catch (error) {
+        lastError = error;
+        if (!(error instanceof Error) || !error.message.includes("429")) throw error;
+      }
+    }
+    throw lastError;
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Agent request failed." }, { status: 400 });
   }
