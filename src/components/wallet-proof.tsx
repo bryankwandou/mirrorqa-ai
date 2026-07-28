@@ -41,14 +41,15 @@ export function WalletProof() {
     if (!wallet?.publicKey) { setStatus("Connect a wallet first."); return; }
     setBusy(true);
     try {
-      const connection = new Connection("https://api.devnet.solana.com", "confirmed");
+      const connection = new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.devnet.solana.com", "confirmed");
       const memoProgram = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
       const memo = JSON.stringify({ app: "MirrorQA", network: "devnet", proof: "workflow-reviewed", run: "demo", ts: new Date().toISOString() });
       const transaction = new Transaction().add(new TransactionInstruction({ keys: [], programId: memoProgram, data: Buffer.from(memo) }));
       transaction.feePayer = wallet.publicKey;
       transaction.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
       const sent = await wallet.signAndSendTransaction(transaction);
-      await connection.confirmTransaction(sent.signature, "confirmed");
+      const confirmation = await connection.confirmTransaction(sent.signature, "confirmed");
+      if (confirmation.value.err) throw new Error("The devnet transaction was rejected.");
       const response = await fetch(`/api/solana/receipt?signature=${sent.signature}`);
       const receipt = await response.json();
       setSignature(sent.signature);
@@ -57,5 +58,5 @@ export function WalletProof() {
   }
 
   const publicProof = process.env.NEXT_PUBLIC_SOLANA_PROOF_SIGNATURE;
-  return <section className="wallet-card"><div className="wallet-head"><span><Wallet size={20} /></span><div><b>Solana proof</b><small>Wallet-owned, public, and independently verifiable</small></div><i>Devnet</i></div><div className="wallet-address">{address ? `${address.slice(0, 7)}…${address.slice(-7)}` : "No wallet connected"}</div><p className="wallet-status"><CheckCircle2 size={16} />{status}</p><div className="wallet-actions"><button className="button dark" onClick={connect} disabled={busy}>{busy ? <LoaderCircle className="spin" size={15} /> : <Wallet size={15} />} Connect wallet</button><button className="button ghost" onClick={signIdentity} disabled={!address || busy}><ShieldCheck size={15} /> Verify ownership</button><button className="button primary" onClick={attest} disabled={!address || busy}>Write devnet proof</button></div>{signature && <a className="explorer-link" href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`} target="_blank" rel="noreferrer">Open your verified transaction <ExternalLink size={14} /></a>}{publicProof && <a className="explorer-link" href={`https://explorer.solana.com/tx/${publicProof}?cluster=devnet`} target="_blank" rel="noreferrer">View MirrorQA launch proof <ExternalLink size={14} /></a>}</section>;
+  return <section className="wallet-card"><div className="wallet-head"><span><Wallet size={20} /></span><div><b>Solana proof</b><small>Wallet-owned, public, and independently verifiable</small></div><i>Devnet</i></div><div className="wallet-address">{address ? `${address.slice(0, 7)}...${address.slice(-7)}` : "No wallet connected"}</div><p className="wallet-status"><CheckCircle2 size={16} />{status}</p><div className="wallet-actions"><button className="button dark" onClick={connect} disabled={busy}>{busy ? <LoaderCircle className="spin" size={15} /> : <Wallet size={15} />} Connect wallet</button><button className="button ghost" onClick={signIdentity} disabled={!address || busy}><ShieldCheck size={15} /> Verify ownership</button><button className="button primary" onClick={attest} disabled={!address || busy}>Write devnet proof</button></div>{signature && <a className="explorer-link" href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`} target="_blank" rel="noreferrer">Open your verified transaction <ExternalLink size={14} /></a>}{publicProof && <a className="explorer-link" href={`https://explorer.solana.com/tx/${publicProof}?cluster=devnet`} target="_blank" rel="noreferrer">View MirrorQA launch proof <ExternalLink size={14} /></a>}</section>;
 }
