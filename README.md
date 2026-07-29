@@ -2,6 +2,8 @@
 
 MirrorQA runs fixed synthetic-customer profiles against product journeys and keeps every friction finding tied to an observed step. This repository contains the public marketing site, evidence-first workspace, deterministic browser-action guardrail, live Groq decision endpoint, and Solana devnet proof workflow.
 
+The public `/proof` lab uses GSAP for the verification-chain sequence and Framer Motion for interactive agent, wallet, and receipt state transitions.
+
 ## Run locally
 
 ```bash
