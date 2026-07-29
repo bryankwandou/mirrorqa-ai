@@ -12,6 +12,14 @@ const inputSchema = z.object({
 
 const fallback = { action: { type: "conclude", outcome: "stuck", reasoning: "The live model is not configured, so I will not pretend an autonomous decision was made." } };
 
+function normalizeAgentResult(raw: string) {
+  const parsed = JSON.parse(raw) as { action?: { type?: string; elementDescription?: string; reasoning?: string; [key: string]: unknown } };
+  if (!parsed.action || typeof parsed.action !== "object") throw new Error("The model returned an invalid action object.");
+  const type = parsed.action.type || "conclude";
+  const target = parsed.action.elementDescription || "the current page";
+  return { ...parsed, action: { ...parsed.action, type, reasoning: parsed.action.reasoning?.trim() || `I chose ${type} on ${target} based on the visible page state.` } };
+}
+
 export async function POST(request: Request) {
   try {
     const input = inputSchema.parse(await request.json());
@@ -34,7 +42,7 @@ export async function POST(request: Request) {
         });
         const content = completion.choices[0]?.message?.content;
         if (!content) throw new Error("The model returned no action.");
-        return NextResponse.json({ ...JSON.parse(content), mode: "groq-live", model });
+        return NextResponse.json({ ...normalizeAgentResult(content), mode: "groq-live", model });
       } catch (error) {
         lastError = error;
         if (!(error instanceof Error) || !error.message.includes("429")) throw error;
