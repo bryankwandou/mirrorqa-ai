@@ -3,6 +3,7 @@ import { chromium } from "playwright-core";
 const base = process.env.TEST_BASE_URL || "https://mirrorqa-ai.vercel.app";
 const executablePath = process.env.CHROME_PATH || "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 const browser = await chromium.launch({ executablePath, headless: true });
+const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 const queue = [new URL("/", base).href];
 const visited = new Set();
 const failures = [];
@@ -13,12 +14,16 @@ while (queue.length && visited.size < 100) {
   const url = queue.shift();
   if (!url || visited.has(url)) continue;
   visited.add(url);
-  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  page.setDefaultTimeout(15_000);
+  page.setDefaultNavigationTimeout(45_000);
+  page.on("pageerror", (error) => consoleErrors.push({ url, message: error.message }));
   page.on("console", (message) => { if (message.type() === "error") consoleErrors.push({ url, message: message.text() }); });
   page.on("response", (response) => { if (response.status() >= 400) badRequests.push({ page: url, resource: response.url(), status: response.status() }); });
   try {
-    const response = await page.goto(url, { waitUntil: "networkidle", timeout: 90_000 });
+    const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
     if (!response || response.status() >= 400) failures.push({ url, status: response?.status() || 0 });
+    await page.waitForTimeout(750);
     const links = await page.locator("a[href]").evaluateAll((items) => items.map((item) => item.href));
     for (const link of links) {
       const target = new URL(link);
@@ -30,6 +35,7 @@ while (queue.length && visited.size < 100) {
   } finally { await page.close(); }
 }
 
+await context.close();
 await browser.close();
 console.log(JSON.stringify({ base, pages: [...visited], failures, consoleErrors, badRequests }, null, 2));
 if (failures.length || consoleErrors.length || badRequests.length) process.exitCode = 1;
