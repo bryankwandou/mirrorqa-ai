@@ -14,12 +14,7 @@ while (queue.length && visited.size < 100) {
   if (!url || visited.has(url)) continue;
   visited.add(url);
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-  page.on("console", (message) => {
-    if (message.type() !== "error") return;
-    const text = message.text();
-    if (text === "Failed to load resource: the server responded with a status of 404 ()") return;
-    consoleErrors.push({ url, message: text });
-  });
+  page.on("console", (message) => { if (message.type() === "error") consoleErrors.push({ url, message: message.text() }); });
   page.on("response", (response) => { if (response.status() >= 400) badRequests.push({ page: url, resource: response.url(), status: response.status() }); });
   try {
     const response = await page.goto(url, { waitUntil: "networkidle", timeout: 90_000 });
