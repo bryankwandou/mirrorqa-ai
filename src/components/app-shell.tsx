@@ -17,7 +17,7 @@ export function AppShell({ children, active = "dashboard" }: { children: React.R
           <small>Workspace</small>
           {nav.map(({ href, label, key, icon: Icon }) => <Link className={active === key ? "active" : ""} href={href} key={key}><Icon size={17} />{label}</Link>)}
           <small>Manage</small>
-          <Link href="/settings/organization"><Settings2 size={17} />Organization</Link>
+          <Link href="/proof"><Settings2 size={17} />Proof lab</Link>
         </nav>
         <div className="sidebar-foot"><Link href="/docs"><CircleHelp size={17} />Documentation</Link><div className="profile"><span className="avatar">AK</span><span><b>Alex Kim</b><small>alex@northstar.co</small></span></div></div>
       </aside>

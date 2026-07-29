@@ -19,7 +19,7 @@ while (queue.length && visited.size < 100) {
   try {
     const response = await page.goto(url, { waitUntil: "networkidle", timeout: 90_000 });
     if (!response || response.status() >= 400) failures.push({ url, status: response?.status() || 0 });
-    const links = await page.locator("a[href]").evaluateAll((items) => items.map((item) => (item as HTMLAnchorElement).href));
+    const links = await page.locator("a[href]").evaluateAll((items) => items.map((item) => item.href));
     for (const link of links) {
       const target = new URL(link);
       target.hash = "";
